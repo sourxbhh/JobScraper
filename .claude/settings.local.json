@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(cmd //c \"where npm\")",
+      "Bash(cmd //c \"where node\")",
+      "Bash(echo:*)",
+      "Bash(cmd //c \"winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements\")",
+      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
+      "Bash(node:*)",
+      "Bash(npm:*)",
+      "Bash(npx tsc:*)",
+      "Bash(python -m venv:*)",
+      "Bash(source venv/Scripts/activate)",
+      "Bash(pip install:*)",
+      "Bash(timeout 8 python:*)",
+      "Bash(timeout 6 python:*)",
+      "Bash(cmd //c \"netstat -ano | findstr :8000\")",
+      "Bash(python:*)"
+    ]
+  }
+}
