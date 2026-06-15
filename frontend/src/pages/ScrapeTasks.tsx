@@ -3,6 +3,7 @@ import { Play, Edit, Trash2, Plus, Clock, MapPin, Search, Loader2 } from 'lucide
 import { useScrapeConfigs } from '@/hooks/useScraper';
 import ScrapeForm from '@/components/ScrapeForm';
 import RunHistory from '@/components/RunHistory';
+import AtsPanel from '@/components/AtsPanel';
 import type { ScrapeConfig, ScrapeRun } from '@/types';
 import { timeAgo } from '@/lib/utils';
 import api from '@/lib/api';
@@ -102,6 +103,8 @@ export default function ScrapeTasks() {
           New Config
         </button>
       </div>
+
+      <AtsPanel onScanned={(n) => { setToast(`ATS scan added ${n} new jobs`); setTimeout(() => setToast(null), 3000); }} />
 
       {loadError && (
         <div className="bg-danger/10 border border-danger/30 rounded-lg p-4 text-sm text-danger">

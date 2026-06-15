@@ -16,7 +16,7 @@ interface Props {
 }
 
 const STATUSES = ['new', 'reviewing', 'applied', 'interview', 'offer', 'rejected'];
-const SOURCES = ['indeed', 'linkedin', 'glassdoor', 'google', 'zip_recruiter'];
+const SOURCES = ['indeed', 'linkedin', 'glassdoor', 'google', 'zip_recruiter', 'greenhouse', 'lever', 'ashby'];
 
 export default function FilterBar({ filters, onChange }: Props) {
   const update = (key: keyof Filters, value: string | boolean | undefined) => {

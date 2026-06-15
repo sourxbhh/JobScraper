@@ -108,3 +108,75 @@ export interface FunnelData {
   status: string;
   count: number;
 }
+
+// ── career-ops integration ──
+
+export interface Resume {
+  id: number;
+  name: string;
+  filename: string | null;
+  is_primary: boolean;
+  chars: number;
+  created_at: string | null;
+}
+
+export interface ResumeEvaluation {
+  id: number;
+  resume_id: number;
+  job_id: number;
+  status: 'pending' | 'running' | 'done' | 'failed';
+  keyword_score: number | null;
+  matched: string[];
+  missing: string[];
+  llm_fit_score: number | null;
+  llm_feedback: string | null;
+  suggestions: string[];
+  error: string | null;
+  created_at: string | null;
+}
+
+export interface AiEvaluation {
+  id: number;
+  job_id: number;
+  status: 'pending' | 'running' | 'done' | 'failed';
+  summary: string | null;
+  fit_score: number | null;
+  recommendation: string | null;
+  blocks: Record<string, unknown>;
+  error: string | null;
+  created_at: string | null;
+}
+
+export interface GeneratedDocument {
+  id: number;
+  job_id: number;
+  type: 'cover_letter' | 'outreach';
+  status: 'pending' | 'running' | 'done' | 'failed';
+  content: string | null;
+  error: string | null;
+  created_at: string | null;
+}
+
+export interface InterviewStory {
+  id: number;
+  title: string;
+  theme: string | null;
+  situation: string | null;
+  task: string | null;
+  action: string | null;
+  result: string | null;
+  reflection: string | null;
+  best_for: string | null;
+  job_id: number | null;
+  source: 'manual' | 'generated';
+  created_at: string | null;
+}
+
+export interface LlmStatus {
+  reachable: boolean;
+  model: string;
+  model_present: boolean;
+  available_models: string[];
+  host: string;
+  error?: string;
+}

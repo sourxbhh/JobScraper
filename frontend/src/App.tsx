@@ -5,6 +5,8 @@ import Jobs from '@/pages/Jobs';
 import JobDetail from '@/pages/JobDetail';
 import ScrapeTasks from '@/pages/ScrapeTasks';
 import Analytics from '@/pages/Analytics';
+import Resumes from '@/pages/Resumes';
+import InterviewPrep from '@/pages/InterviewPrep';
 
 function App() {
   return (
@@ -16,6 +18,8 @@ function App() {
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/scrapes" element={<ScrapeTasks />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/resumes" element={<Resumes />} />
+          <Route path="/interview" element={<InterviewPrep />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink, Star, MapPin, Clock, Briefcase, DollarSign } f
 import api from '@/lib/api';
 import type { Job } from '@/types';
 import StatusBadge from '@/components/StatusBadge';
+import CareerPanels from '@/components/CareerPanels';
 import { timeAgo, formatSalary, cn } from '@/lib/utils';
 
 const STATUS_OPTIONS = ['new', 'reviewing', 'applied', 'interview', 'offer', 'rejected'];
@@ -121,6 +122,8 @@ export default function JobDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-4">
+          <CareerPanels jobId={job.id} />
+
           {skills.length > 0 && (
             <div className="bg-surface border border-border rounded-lg p-4">
               <h3 className="text-sm font-medium text-text-secondary mb-2">Skills Found</h3>

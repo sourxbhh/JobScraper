@@ -2,12 +2,15 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, Settings, BarChart3,
   Star, CheckCircle, ChevronLeft, ChevronRight, Crosshair,
+  FileText, MessagesSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/jobs', icon: Briefcase, label: 'Jobs' },
+  { to: '/resumes', icon: FileText, label: 'Resumes' },
+  { to: '/interview', icon: MessagesSquare, label: 'Interview Prep' },
   { to: '/scrapes', icon: Settings, label: 'Scrape Tasks' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
 ];

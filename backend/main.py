@@ -5,8 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from models.database import Base, engine, SessionLocal
 from models.scrape_config import ScrapeConfig
-from routes import jobs, scraper, analytics
+# Import all model modules so their tables register on create_all().
+from models import resume, ai_eval, interview, document, settings  # noqa: F401
+from routes import jobs, scraper, analytics, llm, resumes, ai, interview as interview_routes, documents, ats
 from services.scheduler import init_scheduler, shutdown_scheduler
+from services.ats_scanner import ensure_ats_config
 
 
 def seed_default_configs():
@@ -77,6 +80,11 @@ def seed_default_configs():
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     seed_default_configs()
+    db = SessionLocal()
+    try:
+        ensure_ats_config(db)  # seed the pseudo-config used to log ATS scan runs
+    finally:
+        db.close()
     init_scheduler()
     yield
     shutdown_scheduler()
@@ -95,6 +103,12 @@ app.add_middleware(
 app.include_router(jobs.router)
 app.include_router(scraper.router)
 app.include_router(analytics.router)
+app.include_router(llm.router)
+app.include_router(resumes.router)
+app.include_router(ai.router)
+app.include_router(interview_routes.router)
+app.include_router(documents.router)
+app.include_router(ats.router)
 
 
 @app.get("/api/health")

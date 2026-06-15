@@ -1,0 +1,405 @@
+# Portal Scanner Configuration
+# Used by /career-ops scan to discover new offers automatically.
+#
+# Strategy (3 levels):
+#   1. Playwright → careers_url of each company (real-time, reliable)
+#   2. Greenhouse API → structured JSON (fast, Greenhouse-only)
+#   3. WebSearch with site: filters (broad discovery, may be stale)
+#
+# IMPORTANT: Each company in tracked_companies MUST have careers_url.
+#
+# HOW TO CUSTOMIZE:
+#   1. Copy this file to portals.yml in the project root
+#   2. Edit title_filter.positive with YOUR target role keywords
+#   3. Add/remove companies in tracked_companies
+#   4. Adjust search_queries for your preferred job boards
+#   5. Set enabled: false on companies you don't care about
+
+# -- Title filter --
+# The scanner uses these keywords to decide if a title is relevant.
+# At least 1 positive must match AND 0 negatives must match (case-insensitive).
+
+title_filter:
+  positive:
+    # Sourabh's target: Data Analyst / BI / Analytics
+    # -- Core analyst roles --
+    - "Data Analyst"
+    - "Business Analyst"
+    - "Business Intelligence"
+    - "BI Analyst"
+    - "BI Developer"
+    - "BI Engineer"
+    - "Analytics Analyst"
+    - "Analytics Engineer"
+    - "Reporting Analyst"
+    - "Insights Analyst"
+    - "Operations Analyst"
+    - "Product Analyst"
+    - "Marketing Analyst"
+    - "Financial Analyst"
+    - "Quantitative Analyst"
+    - "Decision Scientist"
+    - "Data Scientist"
+    # -- Adjacent / stretch --
+    - "Data Engineer"
+    - "Analytics"
+    - "Reporting"
+    # -- Tool / skill signals --
+    - "SQL"
+    - "Power BI"
+    - "Tableau"
+    - "Looker"
+  negative:
+    # Exclude roles outside the analyst track
+    - "Intern"
+    - "Internship"
+    - "Manager"
+    - "Director"
+    - "Head of"
+    - "VP "
+    - "Principal"
+    - "Staff "
+    - ".NET"
+    - "Java "
+    - "iOS"
+    - "Android"
+    - "PHP"
+    - "Ruby"
+    - "Embedded"
+    - "Firmware"
+    - "Sales "
+    - "Account Executive"
+    - "Clearance"
+    - "Secret"           # excludes security-clearance roles (sponsorship-incompatible)
+  seniority_boost:
+    # Prefixes that add relevance but are not required (mid-level focus)
+    - "Senior"
+    - "Sr."
+    - "Mid"
+    - "II"
+    - "Lead"
+
+# ============================================================================
+# -- Job-board aggregators (LinkedIn / Indeed / Glassdoor / ZipRecruiter / Google)
+# ============================================================================
+# These are the big public boards. Unlike the Greenhouse/Lever/Ashby APIs in
+# tracked_companies (clean JSON, fully reliable), these aggregators have NO open
+# API and actively fight automated access. The scan mode opens the search URLs
+# below with Playwright, reads visible cards, and falls back to a WebSearch
+# `site:` query if the page is blocked (login wall / CAPTCHA / Cloudflare).
+#
+# RELIABILITY (be realistic):
+#   LinkedIn / Indeed / Glassdoor / ZipRecruiter = best-effort. Expect partial
+#   results; some scans will be blocked. Google Jobs is the most accessible.
+#
+# Each URL has a {RECENCY} placeholder the scanner substitutes from
+# recency_windows below, and a {QUERY}/{LOCATION} placeholder.
+
+job_boards:
+  defaults:
+    query: "data analyst"
+    location: "United States"
+    remote_ok: true
+
+  # -- Recency windows --
+  # Requested buckets, newest first. The scanner runs the SHORTEST window first
+  # and works outward, so the freshest postings surface at the top.
+  # NOTE ON GRANULARITY:
+  #   - LinkedIn supports TRUE arbitrary windows via f_TPR=r<seconds> → every
+  #     bucket below (1h … 3d) works precisely.
+  #   - Indeed/Glassdoor/ZipRecruiter/Google only filter by DAY (today/3-day).
+  #     For sub-day buckets the scanner uses the 1-day filter + sort-by-date,
+  #     then reads each card's "posted X hours ago" label to keep only matches.
+  recency_windows:        # label : seconds
+    - { label: "1h",  seconds: 3600 }
+    - { label: "2h",  seconds: 7200 }
+    - { label: "3h",  seconds: 10800 }
+    - { label: "5h",  seconds: 18000 }
+    - { label: "10h", seconds: 36000 }
+    - { label: "1d",  seconds: 86400 }
+    - { label: "2d",  seconds: 172800 }
+    - { label: "3d",  seconds: 259200 }
+
+  boards:
+    - name: LinkedIn
+      enabled: true
+      precise_recency: true     # f_TPR=r<seconds> honors any window exactly
+      # {SECONDS} = recency window in seconds; sortBy=DD = most recent first
+      url: "https://www.linkedin.com/jobs/search/?keywords={QUERY}&location={LOCATION}&f_TPR=r{SECONDS}&sortBy=DD"
+      websearch_fallback: 'site:linkedin.com/jobs "data analyst" {LOCATION}'
+
+    - name: Indeed
+      enabled: true
+      precise_recency: false    # fromage is day-only; read "X hours ago" to refine
+      # fromage = max age in DAYS (1,3,7,14); sort=date = newest first
+      url: "https://www.indeed.com/jobs?q={QUERY}&l={LOCATION}&fromage={DAYS}&sort=date"
+      websearch_fallback: 'site:indeed.com "data analyst" {LOCATION}'
+
+    - name: Glassdoor
+      enabled: true
+      precise_recency: false
+      # fromAge = max age in DAYS (1,3,7,14,30)
+      url: "https://www.glassdoor.com/Job/jobs.htm?sc.keyword={QUERY}&fromAge={DAYS}&sortBy=date_desc"
+      websearch_fallback: 'site:glassdoor.com "data analyst" jobs {LOCATION}'
+
+    - name: ZipRecruiter
+      enabled: true
+      precise_recency: false
+      # days = max age in DAYS
+      url: "https://www.ziprecruiter.com/jobs-search?search={QUERY}&location={LOCATION}&days={DAYS}&sort=date"
+      websearch_fallback: 'site:ziprecruiter.com "data analyst" {LOCATION}'
+
+    - name: Google Jobs
+      enabled: true
+      precise_recency: false
+      # Google for Jobs; date_posted chip accepts today/3days/week/month
+      url: "https://www.google.com/search?q={QUERY}+jobs+{LOCATION}&ibp=htl;jobs&htichips=date_posted:{GDATE}&htischips=date_posted;{GDATE}"
+      websearch_fallback: '"data analyst" jobs {LOCATION} posted today'
+
+# -- Search queries --
+# Each query triggers a WebSearch. Use site: to filter by portal.
+# The scanner extracts title, URL, and company from results.
+
+search_queries:
+  # Level-3 WebSearch discovery for US Data-Analyst roles across all ATS portals.
+  # Finds NEW companies not yet in tracked_companies. Results may be less fresh
+  # than the API layer, so they are liveness-checked before entering the pipeline.
+
+  - name: Greenhouse — Data Analyst
+    query: 'site:job-boards.greenhouse.io "Data Analyst" OR "Business Intelligence Analyst" United States'
+    enabled: true
+
+  - name: Greenhouse — Analytics Engineer
+    query: 'site:job-boards.greenhouse.io "Analytics Engineer" OR "BI Developer" remote United States'
+    enabled: true
+
+  - name: Ashby — Data Analyst
+    query: 'site:jobs.ashbyhq.com "Data Analyst" OR "Business Intelligence" OR "Analytics Engineer"'
+    enabled: true
+
+  - name: Lever — Data Analyst
+    query: 'site:jobs.lever.co "Data Analyst" OR "Business Intelligence Analyst" OR "Analytics Engineer"'
+    enabled: true
+
+  - name: Greenhouse — Product/Marketing Analyst
+    query: 'site:job-boards.greenhouse.io "Product Analyst" OR "Marketing Analyst" OR "Operations Analyst" remote'
+    enabled: true
+
+  - name: Cross-portal — Power BI / Tableau / SQL
+    query: '"Data Analyst" "Power BI" OR "Tableau" OR "SQL" remote United States site:job-boards.greenhouse.io OR site:jobs.ashbyhq.com OR site:jobs.lever.co'
+    enabled: true
+
+# -- Tracked companies --
+# Companies whose career pages are checked directly.
+
+# -- Tracked companies (US Data-Analyst focused) --
+tracked_companies:
+
+  # ========================================================================
+  # US Data-Analyst employers (verified live via ATS API, 37 companies)
+  # Curated for Sourabh. Each slug confirmed to return >=1 analyst role.
+  # ========================================================================
+
+  - name: Veeva
+    careers_url: https://jobs.lever.co/veeva
+    enabled: true
+
+  - name: Lyft
+    careers_url: https://job-boards.greenhouse.io/lyft
+    api: https://boards-api.greenhouse.io/v1/boards/lyft/jobs
+    enabled: true
+
+  - name: Instacart
+    careers_url: https://job-boards.greenhouse.io/instacart
+    api: https://boards-api.greenhouse.io/v1/boards/instacart/jobs
+    enabled: true
+
+  - name: Stripe
+    careers_url: https://job-boards.greenhouse.io/stripe
+    api: https://boards-api.greenhouse.io/v1/boards/stripe/jobs
+    enabled: true
+
+  - name: Roblox
+    careers_url: https://job-boards.greenhouse.io/roblox
+    api: https://boards-api.greenhouse.io/v1/boards/roblox/jobs
+    enabled: true
+
+  - name: Robinhood
+    careers_url: https://job-boards.greenhouse.io/robinhood
+    api: https://boards-api.greenhouse.io/v1/boards/robinhood/jobs
+    enabled: true
+
+  - name: Dropbox
+    careers_url: https://job-boards.greenhouse.io/dropbox
+    api: https://boards-api.greenhouse.io/v1/boards/dropbox/jobs
+    enabled: true
+
+  - name: Oscar Health
+    careers_url: https://job-boards.greenhouse.io/oscar
+    api: https://boards-api.greenhouse.io/v1/boards/oscar/jobs
+    enabled: true
+
+  - name: Airbnb
+    careers_url: https://job-boards.greenhouse.io/airbnb
+    api: https://boards-api.greenhouse.io/v1/boards/airbnb/jobs
+    enabled: true
+
+  - name: Reddit
+    careers_url: https://job-boards.greenhouse.io/reddit
+    api: https://boards-api.greenhouse.io/v1/boards/reddit/jobs
+    enabled: true
+
+  - name: Pinterest
+    careers_url: https://job-boards.greenhouse.io/pinterest
+    api: https://boards-api.greenhouse.io/v1/boards/pinterest/jobs
+    enabled: true
+
+  - name: Samsara
+    careers_url: https://job-boards.greenhouse.io/samsara
+    api: https://boards-api.greenhouse.io/v1/boards/samsara/jobs
+    enabled: true
+
+  - name: Chime
+    careers_url: https://job-boards.greenhouse.io/chime
+    api: https://boards-api.greenhouse.io/v1/boards/chime/jobs
+    enabled: true
+
+  - name: Brex
+    careers_url: https://job-boards.greenhouse.io/brex
+    api: https://boards-api.greenhouse.io/v1/boards/brex/jobs
+    enabled: true
+
+  - name: Databricks
+    careers_url: https://job-boards.greenhouse.io/databricks
+    api: https://boards-api.greenhouse.io/v1/boards/databricks/jobs
+    enabled: true
+
+  - name: Spotify
+    careers_url: https://jobs.lever.co/spotify
+    enabled: true
+
+  - name: Discord
+    careers_url: https://job-boards.greenhouse.io/discord
+    api: https://boards-api.greenhouse.io/v1/boards/discord/jobs
+    enabled: true
+
+  - name: SoFi
+    careers_url: https://job-boards.greenhouse.io/sofi
+    api: https://boards-api.greenhouse.io/v1/boards/sofi/jobs
+    enabled: true
+
+  - name: Faire
+    careers_url: https://job-boards.greenhouse.io/faire
+    api: https://boards-api.greenhouse.io/v1/boards/faire/jobs
+    enabled: true
+
+  - name: Datadog
+    careers_url: https://job-boards.greenhouse.io/datadog
+    api: https://boards-api.greenhouse.io/v1/boards/datadog/jobs
+    enabled: true
+
+  - name: DoubleVerify
+    careers_url: https://job-boards.greenhouse.io/doubleverify
+    api: https://boards-api.greenhouse.io/v1/boards/doubleverify/jobs
+    enabled: true
+
+  - name: Coinbase
+    careers_url: https://job-boards.greenhouse.io/coinbase
+    api: https://boards-api.greenhouse.io/v1/boards/coinbase/jobs
+    enabled: true
+
+  - name: Asana
+    careers_url: https://job-boards.greenhouse.io/asana
+    api: https://boards-api.greenhouse.io/v1/boards/asana/jobs
+    enabled: true
+
+  - name: Toast
+    careers_url: https://job-boards.greenhouse.io/toast
+    api: https://boards-api.greenhouse.io/v1/boards/toast/jobs
+    enabled: true
+
+  - name: Ramp
+    careers_url: https://jobs.ashbyhq.com/ramp
+    enabled: true
+
+  - name: Affirm
+    careers_url: https://job-boards.greenhouse.io/affirm
+    api: https://boards-api.greenhouse.io/v1/boards/affirm/jobs
+    enabled: true
+
+  - name: Gusto
+    careers_url: https://job-boards.greenhouse.io/gusto
+    api: https://boards-api.greenhouse.io/v1/boards/gusto/jobs
+    enabled: true
+
+  - name: Carta
+    careers_url: https://job-boards.greenhouse.io/carta
+    api: https://boards-api.greenhouse.io/v1/boards/carta/jobs
+    enabled: true
+
+  - name: Verkada
+    careers_url: https://job-boards.greenhouse.io/verkada
+    api: https://boards-api.greenhouse.io/v1/boards/verkada/jobs
+    enabled: true
+
+  - name: Vanta
+    careers_url: https://jobs.ashbyhq.com/vanta
+    enabled: true
+
+  - name: Squarespace
+    careers_url: https://job-boards.greenhouse.io/squarespace
+    api: https://boards-api.greenhouse.io/v1/boards/squarespace/jobs
+    enabled: true
+
+  - name: Nextdoor
+    careers_url: https://job-boards.greenhouse.io/nextdoor
+    api: https://boards-api.greenhouse.io/v1/boards/nextdoor/jobs
+    enabled: true
+
+  - name: Cloudflare
+    careers_url: https://job-boards.greenhouse.io/cloudflare
+    api: https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs
+    enabled: true
+
+  - name: Cribl
+    careers_url: https://job-boards.greenhouse.io/cribl
+    api: https://boards-api.greenhouse.io/v1/boards/cribl/jobs
+    enabled: true
+
+  - name: Webflow
+    careers_url: https://job-boards.greenhouse.io/webflow
+    api: https://boards-api.greenhouse.io/v1/boards/webflow/jobs
+    enabled: true
+
+  - name: Notion
+    careers_url: https://jobs.ashbyhq.com/notion
+    enabled: true
+
+  - name: Watershed
+    careers_url: https://jobs.ashbyhq.com/watershed
+    enabled: true
+
+  # -- Retained AI-cos that post US analyst roles --
+
+  - name: Anthropic
+    careers_url: https://job-boards.greenhouse.io/anthropic
+    api: https://boards-api.greenhouse.io/v1/boards/anthropic/jobs
+    enabled: true
+
+  - name: Intercom
+    careers_url: https://job-boards.greenhouse.io/intercom
+    api: https://boards-api.greenhouse.io/v1/boards/intercom/jobs
+    enabled: true
+
+  - name: Glean
+    careers_url: https://job-boards.greenhouse.io/gleanwork
+    api: https://boards-api.greenhouse.io/v1/boards/gleanwork/jobs
+    enabled: true
+
+  - name: Sierra
+    careers_url: https://jobs.ashbyhq.com/sierra
+    enabled: true
+
+  - name: Cohere
+    careers_url: https://jobs.ashbyhq.com/cohere
+    enabled: true

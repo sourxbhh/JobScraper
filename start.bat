@@ -36,7 +36,7 @@ call venv\Scripts\activate.bat
 echo Installing backend dependencies...
 pip install numpy --quiet
 pip install --no-deps python-jobspy --quiet
-pip install fastapi uvicorn[standard] sqlalchemy apscheduler pydantic pandas openpyxl python-multipart aiofiles requests beautifulsoup4 tls_client markdownify regex --quiet
+pip install fastapi uvicorn[standard] sqlalchemy apscheduler pydantic pandas openpyxl python-multipart aiofiles requests beautifulsoup4 tls_client markdownify regex python-docx pypdf PyYAML --quiet
 
 cd ..
 

@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+backend/venv/
+.venv/
+
+# Local database (regenerated on startup; may contain personal data)
+backend/data/*.db
+
+# Environment / secrets
+.env
+.env.*
+
+# Node / frontend build
+node_modules/
+frontend/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

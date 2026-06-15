@@ -64,7 +64,15 @@ def get_run(run_id: int, db: Session = Depends(get_db)):
 
 @router.get("")
 def list_configs(db: Session = Depends(get_db)):
-    configs = db.query(ScrapeConfig).order_by(desc(ScrapeConfig.created_at)).all()
+    from services.ats_scanner import ATS_CONFIG_NAME
+    # Hide the internal ATS pseudo-config (it only exists to log ATS scan runs;
+    # running it as a JobSpy scrape would fire junk search terms).
+    configs = (
+        db.query(ScrapeConfig)
+        .filter(ScrapeConfig.name != ATS_CONFIG_NAME)
+        .order_by(desc(ScrapeConfig.created_at))
+        .all()
+    )
     result = []
     for c in configs:
         last_run = (
