@@ -27,10 +27,10 @@ export default function Jobs() {
     min_salary: '',
     min_match_score: '',
   });
-  const [sortBy, setSortBy] = useState('date_scraped');
+  const [sortBy, setSortBy] = useState('match_score');
   const [sortOrder, setSortOrder] = useState('desc');
   const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(25);
+  const [perPage, setPerPage] = useState(100);
 
   const { data, loading, updateJob, bulkUpdate } = useJobs({
     search: filters.search || undefined,
@@ -79,6 +79,8 @@ export default function Jobs() {
           sortBy={sortBy}
           sortOrder={sortOrder}
           onPerPageChange={n => { setPerPage(n); setPage(1); }}
+          source={filters.source}
+          onSourceChange={s => { setFilters({ ...filters, source: s }); setPage(1); }}
         />
       ) : null}
     </div>

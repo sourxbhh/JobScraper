@@ -1,4 +1,5 @@
 import { Search, X } from 'lucide-react';
+import { SOURCE_OPTIONS, sourceLabel } from '@/lib/utils';
 
 interface Filters {
   search: string;
@@ -16,7 +17,6 @@ interface Props {
 }
 
 const STATUSES = ['new', 'reviewing', 'applied', 'interview', 'offer', 'rejected'];
-const SOURCES = ['indeed', 'linkedin', 'glassdoor', 'google', 'zip_recruiter', 'greenhouse', 'lever', 'ashby'];
 
 export default function FilterBar({ filters, onChange }: Props) {
   const update = (key: keyof Filters, value: string | boolean | undefined) => {
@@ -68,8 +68,8 @@ export default function FilterBar({ filters, onChange }: Props) {
         className="bg-background border border-border rounded-md px-3 py-2 text-sm text-text-primary outline-none focus:border-accent"
       >
         <option value="">All Sources</option>
-        {SOURCES.map(s => (
-          <option key={s} value={s}>{s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
+        {SOURCE_OPTIONS.map(s => (
+          <option key={s} value={s}>{sourceLabel(s)}</option>
         ))}
       </select>
 

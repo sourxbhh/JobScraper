@@ -10,7 +10,8 @@ interface Props {
   onCancel: () => void;
 }
 
-const SITES = ['indeed', 'linkedin', 'glassdoor', 'google', 'zip_recruiter'];
+const SITES = ['indeed', 'linkedin', 'glassdoor', 'google', 'zip_recruiter', 'ycombinator'];
+const SITE_LABELS: Record<string, string> = { ycombinator: 'Y Combinator' };
 const SCHEDULES = ['', 'every 6h', 'every 12h', 'daily'];
 const JOB_TYPES = ['internship', 'co-op', 'fulltime', 'parttime', 'contract'];
 
@@ -118,7 +119,7 @@ export default function ScrapeForm({ initial, onSubmit, onCancel }: Props) {
           {SITES.map(s => (
             <label key={s} className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
               <input type="checkbox" checked={sites.includes(s)} onChange={() => toggleSite(s)} className="accent-accent" />
-              {s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+              {SITE_LABELS[s] || s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
             </label>
           ))}
         </div>

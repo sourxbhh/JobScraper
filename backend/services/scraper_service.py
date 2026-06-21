@@ -1,5 +1,9 @@
 import json
+import logging
+import threading
+import time
 import traceback
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional
 
@@ -9,6 +13,22 @@ from sqlalchemy.orm import Session
 from models.job import Job
 from models.scrape_config import ScrapeConfig, ScrapeRun
 from services.deduplication import generate_external_id
+
+logger = logging.getLogger("jobhunter.scraper")
+
+# Substrings that mark a transient failure worth retrying vs. a hard block by
+# the remote site's bot protection (expected for ZipRecruiter/Glassdoor when
+# scraping without proxies — not a code bug).
+_TRANSIENT_MARKERS = (
+    "429", "too many requests", "timed out", "timeout",
+    "temporarily", "connection", "read timed out", "503", "502",
+)
+_BLOCKED_MARKERS = ("403", "forbidden", "captcha", "blocked", "400")
+
+# jobspy fires each scrape on its own per-site logger ("JobSpy:Indeed", ...),
+# and the capture below swaps those loggers' handlers process-wide, so concurrent
+# scrapes (scheduler + manual run) must not overlap. Serialize them.
+_scrape_lock = threading.Lock()
 
 SKILL_KEYWORDS = {
     "high_value": [
@@ -73,13 +93,100 @@ def calculate_match_score(title: str, description: str, location: str, job_type:
     return max(0.0, min(100.0, score))
 
 
+# Sites handled by a dedicated scraper instead of jobspy.
+YC_SITE = "ycombinator"
+_CUSTOM_SITES = {YC_SITE, "y_combinator", "yc"}
+
+
 def _map_site_name(site: str) -> str:
     """Normalize site names between our config and jobspy."""
     mapping = {
         "zip_recruiter": "zip_recruiter",
         "ziprecruiter": "zip_recruiter",
+        "y_combinator": YC_SITE,
+        "yc": YC_SITE,
     }
     return mapping.get(site.lower(), site.lower())
+
+
+class _ListLogHandler(logging.Handler):
+    """Collects jobspy's WARNING/ERROR records instead of letting them print
+    to the server console."""
+
+    def __init__(self):
+        super().__init__(level=logging.WARNING)
+        self.messages = []
+
+    def emit(self, record):
+        self.messages.append(record.getMessage())
+
+
+@contextmanager
+def _capture_jobspy_logs():
+    """Redirect every ``JobSpy:*`` logger into a single in-memory handler for
+    the duration of a scrape, then restore the originals. This stops blocked
+    external sites from flooding stderr and lets us attach their messages to
+    the ScrapeRun record instead."""
+    handler = _ListLogHandler()
+    touched = []
+    for name in list(logging.root.manager.loggerDict):
+        if not str(name).startswith("JobSpy"):
+            continue
+        lg = logging.getLogger(name)
+        touched.append((lg, lg.handlers))
+        lg.handlers = [handler]
+    try:
+        yield handler
+    finally:
+        for lg, saved in touched:
+            lg.handlers = saved
+
+
+def _scrape_one(scrape_jobs, site, term, loc, config, max_retries=2):
+    """Scrape a single site for one (term, location). Returns
+    (DataFrame|None, log_messages, status) where status is one of
+    'ok', 'empty', 'blocked', 'error'. Retries transient failures."""
+    google_term = config.google_search_term
+    # The Google Jobs scraper returns nothing without a natural-language query.
+    if site == "google" and not google_term:
+        google_term = f"{term} jobs near {loc}".strip()
+
+    attempt = 0
+    while True:
+        with _capture_jobspy_logs() as cap:
+            try:
+                df = scrape_jobs(
+                    site_name=[site],
+                    search_term=term,
+                    location=loc,
+                    distance=config.distance,
+                    results_wanted=config.results_per_site,
+                    hours_old=config.max_age_hours,
+                    is_remote=config.include_remote,
+                    google_search_term=google_term if site == "google" else None,
+                )
+                raised = None
+            except Exception as e:  # network/parse errors jobspy didn't swallow
+                df, raised = None, e
+
+        msgs = list(cap.messages)
+        if raised is not None:
+            msgs.append(f"exception: {raised}")
+        blob = " ".join(msgs).lower()
+
+        if raised is None and df is not None and not df.empty:
+            return df, [], "ok"
+
+        if any(k in blob for k in _TRANSIENT_MARKERS) and attempt < max_retries:
+            attempt += 1
+            time.sleep(2 ** attempt)
+            continue
+
+        if raised is not None:
+            return None, msgs, "error"
+        if any(k in blob for k in _BLOCKED_MARKERS):
+            return None, msgs, "blocked"
+        return None, msgs, "empty"
 
 
 async def run_scrape(db: Session, config_id: int) -> dict:
@@ -104,34 +211,64 @@ async def run_scrape(db: Session, config_id: int) -> dict:
         sites = [_map_site_name(s) for s in config.sites]
         all_results = []
 
+        # Y Combinator is scraped via its own module (jobspy can't reach it) and
+        # is a global source, so split it out of the per-location jobspy loop.
+        yc_requested = YC_SITE in sites
+        jobspy_sites = [s for s in sites if s not in _CUSTOM_SITES]
+
         # Support both old single-location and new multi-location format
         locations = config.locations if config.locations else ["Charlotte, NC"]
         if isinstance(locations, str):
             locations = [locations]
 
-        for loc in locations:
-            for term in config.search_terms:
-                log_lines.append(f"Searching: '{term}' in '{loc}' on {sites}")
-                try:
-                    results = scrape_jobs(
-                        site_name=sites,
-                        search_term=term,
-                        location=loc,
-                        distance=config.distance,
-                        results_wanted=config.results_per_site,
-                        hours_old=config.max_age_hours,
-                        is_remote=config.include_remote,
-                        google_search_term=config.google_search_term if config.google_search_term else None,
-                    )
-                    if results is not None and not results.empty:
-                        all_results.append(results)
-                        log_lines.append(f"  Found {len(results)} results for '{term}' in '{loc}'")
-                    else:
-                        log_lines.append(f"  No results for '{term}' in '{loc}'")
-                except Exception as e:
-                    err_msg = f"Error scraping '{term}' in '{loc}': {str(e)}"
-                    log_lines.append(f"  {err_msg}")
-                    errors_list.append(err_msg)
+        if yc_requested:
+            try:
+                from services.yc_scraper import scrape_yc
+
+                yc_df = scrape_yc(
+                    search_terms=config.search_terms,
+                    locations=locations,
+                    results_wanted=config.results_per_site,
+                    include_remote=config.include_remote,
+                )
+                if yc_df is not None and not yc_df.empty:
+                    all_results.append(yc_df)
+                    log_lines.append(f"  ycombinator: {len(yc_df)} results")
+                else:
+                    log_lines.append("  ycombinator: no results")
+            except Exception as e:
+                err_msg = f"ycombinator error: {e}"
+                log_lines.append(f"  {err_msg}")
+                errors_list.append(err_msg)
+
+        blocked_sites = set()
+        with _scrape_lock:
+            for loc in locations:
+                for term in config.search_terms:
+                    log_lines.append(f"Searching: '{term}' in '{loc}' on {jobspy_sites}")
+                    for site in jobspy_sites:
+                        df, msgs, status = _scrape_one(scrape_jobs, site, term, loc, config)
+                        if status == "ok":
+                            all_results.append(df)
+                            log_lines.append(f"  {site}: {len(df)} results")
+                        elif status == "empty":
+                            log_lines.append(f"  {site}: no results")
+                        elif status == "blocked":
+                            # Expected when the remote site blocks bots (no proxies).
+                            # Log it, but don't treat it as a run error every time.
+                            blocked_sites.add(site)
+                            log_lines.append(f"  {site}: blocked by remote site (skipped)")
+                        else:  # error — a genuine, unexpected failure
+                            detail = msgs[-1] if msgs else "unknown error"
+                            err_msg = f"{site} error for '{term}' in '{loc}': {detail}"
+                            log_lines.append(f"  {err_msg}")
+                            errors_list.append(err_msg)
+
+        if blocked_sites:
+            log_lines.append(
+                "Sites blocked by bot protection (need proxies to scrape): "
+                + ", ".join(sorted(blocked_sites))
+            )
 
         if all_results:
             combined = pd.concat(all_results, ignore_index=True)

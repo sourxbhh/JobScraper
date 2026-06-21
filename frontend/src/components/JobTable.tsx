@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import type { Job, JobsResponse } from '@/types';
 import StatusBadge from './StatusBadge';
-import { timeAgo, formatSalary, cn } from '@/lib/utils';
+import { timeAgo, formatSalary, cn, SOURCE_OPTIONS, sourceLabel } from '@/lib/utils';
 
 interface Props {
   data: JobsResponse;
@@ -17,6 +17,8 @@ interface Props {
   sortBy: string;
   sortOrder: string;
   onPerPageChange: (n: number) => void;
+  source: string;
+  onSourceChange: (source: string) => void;
 }
 
 const STATUS_OPTIONS = ['new', 'reviewing', 'applied', 'interview', 'offer', 'rejected'];
@@ -30,6 +32,8 @@ export default function JobTable({
   sortBy,
   sortOrder,
   onPerPageChange,
+  source,
+  onSourceChange,
 }: Props) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -111,9 +115,9 @@ export default function JobTable({
       )}
 
       <div className="bg-surface border border-border rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[calc(100vh-260px)]">
           <table className="w-full">
-            <thead className="border-b border-border">
+            <thead className="border-b border-border sticky top-0 z-10 bg-surface">
               <tr>
                 <th className="px-3 py-2 w-8">
                   <input
@@ -127,7 +131,27 @@ export default function JobTable({
                 <th className={headerClass} onClick={() => onSort('title')}>Title <SortIcon field="title" /></th>
                 <th className={headerClass} onClick={() => onSort('company')}>Company <SortIcon field="company" /></th>
                 <th className={headerClass} onClick={() => onSort('location')}>Location <SortIcon field="location" /></th>
-                <th className={headerClass} onClick={() => onSort('source')}>Source <SortIcon field="source" /></th>
+                <th className="px-3 py-2 text-left">
+                  <div className="flex flex-col gap-1">
+                    <span
+                      className="text-xs font-medium text-text-secondary uppercase tracking-wider cursor-pointer hover:text-text-primary select-none"
+                      onClick={() => onSort('source')}
+                    >
+                      Source <SortIcon field="source" />
+                    </span>
+                    <select
+                      value={source}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => onSourceChange(e.target.value)}
+                      className="bg-background border border-border rounded px-1.5 py-0.5 text-xs font-normal normal-case text-text-primary outline-none focus:border-accent cursor-pointer"
+                    >
+                      <option value="">All sites</option>
+                      {SOURCE_OPTIONS.map(s => (
+                        <option key={s} value={s}>{sourceLabel(s)}</option>
+                      ))}
+                    </select>
+                  </div>
+                </th>
                 <th className={headerClass} onClick={() => onSort('date_scraped')}>Posted <SortIcon field="date_scraped" /></th>
                 <th className={headerClass} onClick={() => onSort('min_salary')}>Salary <SortIcon field="min_salary" /></th>
                 <th className={headerClass} onClick={() => onSort('match_score')}>Score <SortIcon field="match_score" /></th>
@@ -182,7 +206,7 @@ export default function JobTable({
                     </td>
                     <td className="px-3 py-2.5">
                       <span className="text-xs px-2 py-0.5 rounded bg-zinc-800 text-text-secondary capitalize">
-                        {job.source.replace('_', ' ')}
+                        {sourceLabel(job.source)}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-sm text-text-secondary" title={job.date_scraped || ''}>
@@ -269,7 +293,7 @@ export default function JobTable({
               onChange={e => onPerPageChange(Number(e.target.value))}
               className="bg-background border border-border rounded-md px-2 py-1 text-sm text-text-primary"
             >
-              {[25, 50, 100].map(n => (
+              {[25, 50, 100, 250, 500, 1000].map(n => (
                 <option key={n} value={n}>{n} / page</option>
               ))}
             </select>

@@ -47,6 +47,18 @@ export const SOURCE_COLORS: Record<string, string> = {
   glassdoor: '#0caa41',
   google: '#4285f4',
   zip_recruiter: '#00a43b',
+  ycombinator: '#ff6600',
 };
+
+// Canonical list of job sources, shared by the filter bar and the jobs table.
+export const SOURCE_OPTIONS = [
+  'indeed', 'linkedin', 'glassdoor', 'google', 'zip_recruiter',
+  'ycombinator', 'greenhouse', 'lever', 'ashby',
+];
+
+export function sourceLabel(source: string): string {
+  if (source === 'ycombinator') return 'Y Combinator';
+  return source.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
 
 export const CHART_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899'];

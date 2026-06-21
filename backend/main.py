@@ -58,7 +58,7 @@ def seed_default_configs():
                     "remote data analyst", "remote BI analyst",
                     "remote business intelligence",
                 ],
-                sites=["indeed", "linkedin", "google"],
+                sites=["indeed", "linkedin", "google", "ycombinator"],
                 locations=["United States"],
                 distance=0,
                 max_age_hours=72,
