@@ -8,6 +8,7 @@ interface Props {
   initial?: ScrapeConfig;
   onSubmit: (data: FormData) => void;
   onCancel: () => void;
+  submitLabel?: string;
 }
 
 const SITES = ['indeed', 'linkedin', 'glassdoor', 'google', 'zip_recruiter', 'ycombinator'];
@@ -15,7 +16,7 @@ const SITE_LABELS: Record<string, string> = { ycombinator: 'Y Combinator' };
 const SCHEDULES = ['', 'every 6h', 'every 12h', 'daily'];
 const JOB_TYPES = ['internship', 'co-op', 'fulltime', 'parttime', 'contract'];
 
-export default function ScrapeForm({ initial, onSubmit, onCancel }: Props) {
+export default function ScrapeForm({ initial, onSubmit, onCancel, submitLabel }: Props) {
   const [name, setName] = useState(initial?.name || '');
   const [searchTerms, setSearchTerms] = useState<string[]>(initial?.search_terms || []);
   const [termInput, setTermInput] = useState('');
@@ -211,7 +212,7 @@ export default function ScrapeForm({ initial, onSubmit, onCancel }: Props) {
 
       <div className="flex gap-3 pt-2">
         <button type="submit" className="bg-accent text-white px-4 py-2 rounded-md text-sm hover:bg-accent/80 transition-colors">
-          {initial ? 'Update Config' : 'Create Config'}
+          {submitLabel || (initial ? 'Update Config' : 'Create Config')}
         </button>
         <button type="button" onClick={onCancel} className="bg-surface border border-border text-text-secondary px-4 py-2 rounded-md text-sm hover:text-text-primary transition-colors">
           Cancel

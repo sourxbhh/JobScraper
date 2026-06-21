@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Play, Edit, Trash2, Plus, Clock, MapPin, Search, Loader2 } from 'lucide-react';
+import { Play, Edit, Trash2, Plus, Clock, MapPin, Search, Loader2, Copy } from 'lucide-react';
 import { useScrapeConfigs } from '@/hooks/useScraper';
 import ScrapeForm from '@/components/ScrapeForm';
 import RunHistory from '@/components/RunHistory';
@@ -12,6 +12,7 @@ export default function ScrapeTasks() {
   const { configs, loading, error: loadError, createConfig, updateConfig, deleteConfig, runScrape } = useScrapeConfigs();
   const [showForm, setShowForm] = useState(false);
   const [editConfig, setEditConfig] = useState<ScrapeConfig | null>(null);
+  const [duplicateSource, setDuplicateSource] = useState<ScrapeConfig | null>(null);
   const [runningIds, setRunningIds] = useState<Set<number>>(new Set());
   const [historyConfigId, setHistoryConfigId] = useState<number | null>(null);
   const [history, setHistory] = useState<ScrapeRun[]>([]);
@@ -49,7 +50,14 @@ export default function ScrapeTasks() {
     }
   };
 
-  if (showForm || editConfig) {
+  const closeForm = () => { setShowForm(false); setEditConfig(null); setDuplicateSource(null); };
+
+  if (showForm || editConfig || duplicateSource) {
+    // Duplicating pre-fills the form with the source config (minus its identity)
+    // and a "(copy)" name, but still saves as a brand-new config.
+    const formInitial = editConfig
+      ?? (duplicateSource ? { ...duplicateSource, name: `${duplicateSource.name} (copy)` } : undefined);
+
     return (
       <div className="max-w-2xl">
         {toast && (
@@ -58,11 +66,12 @@ export default function ScrapeTasks() {
           </div>
         )}
         <h1 className="text-2xl font-semibold mb-6">
-          {editConfig ? 'Edit Scrape Config' : 'New Scrape Config'}
+          {editConfig ? 'Edit Scrape Config' : duplicateSource ? 'Duplicate Scrape Config' : 'New Scrape Config'}
         </h1>
         <div className="bg-surface border border-border rounded-lg p-6">
           <ScrapeForm
-            initial={editConfig || undefined}
+            initial={formInitial}
+            submitLabel={editConfig ? 'Update Config' : 'Create Config'}
             onSubmit={async data => {
               try {
                 if (editConfig) {
@@ -70,15 +79,14 @@ export default function ScrapeTasks() {
                 } else {
                   await createConfig(data);
                 }
-                setShowForm(false);
-                setEditConfig(null);
+                closeForm();
               } catch (err) {
                 console.error('Failed to save config:', err);
                 setToast('Failed to save configuration. Make sure the backend is running.');
                 setTimeout(() => setToast(null), 4000);
               }
             }}
-            onCancel={() => { setShowForm(false); setEditConfig(null); }}
+            onCancel={closeForm}
           />
         </div>
       </div>
@@ -190,6 +198,13 @@ export default function ScrapeTasks() {
                   className="flex items-center gap-1.5 bg-surface border border-border text-text-secondary px-3 py-1.5 rounded-md text-xs hover:text-text-primary transition-colors"
                 >
                   <Edit className="w-3 h-3" /> Edit
+                </button>
+                <button
+                  onClick={() => setDuplicateSource(config)}
+                  title="Copy this config into a new one to tweak"
+                  className="flex items-center gap-1.5 bg-surface border border-border text-text-secondary px-3 py-1.5 rounded-md text-xs hover:text-text-primary transition-colors"
+                >
+                  <Copy className="w-3 h-3" /> Duplicate
                 </button>
                 <button
                   onClick={() => handleShowHistory(config.id)}
