@@ -11,7 +11,10 @@ interface Props {
   submitLabel?: string;
 }
 
-const SITES = ['indeed', 'linkedin', 'glassdoor', 'google', 'zip_recruiter', 'ycombinator'];
+const SITES = [
+  'indeed', 'linkedin', 'glassdoor', 'google', 'zip_recruiter',
+  'ycombinator', 'greenhouse', 'lever', 'ashby',
+];
 const SITE_LABELS: Record<string, string> = { ycombinator: 'Y Combinator' };
 const SCHEDULES = ['', 'every 6h', 'every 12h', 'daily'];
 const JOB_TYPES = ['internship', 'co-op', 'fulltime', 'parttime', 'contract'];

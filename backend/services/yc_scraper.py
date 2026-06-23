@@ -27,6 +27,16 @@ YC_BASE = "https://www.ycombinator.com"
 YC_JOBS_URL = f"{YC_BASE}/jobs"
 SITE_NAME = "ycombinator"
 
+# YC's /jobs page defaults to the Engineering category only (~20 postings), so a
+# data-analyst search against it always returns nothing. The full board is split
+# across these role categories, each reachable at /jobs/role/<category>. We fetch
+# all of them and let the search-term filter decide what's relevant — analyst
+# roles mostly live under "operations", but YC files them inconsistently.
+YC_ROLE_CATEGORIES = (
+    "eng", "design", "product", "science", "sales",
+    "marketing", "support", "operations", "recruiting", "finance", "legal",
+)
+
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -47,6 +57,34 @@ def _fetch_props(url: str, timeout: int = 20) -> dict | None:
         return None
     data = json.loads(unescape(match.group(1)))
     return data.get("props")
+
+
+def _fetch_all_categories() -> list[dict]:
+    """Fetch every YC role category page concurrently and return the combined,
+    de-duplicated list of postings. A single category failing is non-fatal."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def _one(cat: str) -> list[dict]:
+        props = _fetch_props(f"{YC_BASE}/jobs/role/{cat}")
+        return (props or {}).get("jobPostings") or []
+
+    seen: set[str] = set()
+    postings: list[dict] = []
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {pool.submit(_one, cat): cat for cat in YC_ROLE_CATEGORIES}
+        for fut in as_completed(futures):
+            cat = futures[fut]
+            try:
+                for job in fut.result():
+                    url = job.get("url") or ""
+                    if url and url in seen:
+                        continue
+                    if url:
+                        seen.add(url)
+                    postings.append(job)
+            except Exception as e:  # one bad category shouldn't fail the scrape
+                logger.debug("YC category fetch failed for %s: %s", cat, e)
+    return postings
 
 
 def _parse_salary(salary_range: str | None) -> tuple[float | None, float | None]:
@@ -125,13 +163,12 @@ def scrape_yc(
     rest of the pipeline expects from a jobspy result.
 
     YC's listing is global (search/location filtering happens client-side via
-    Algolia), so we fetch the page once and filter the postings ourselves.
+    Algolia), so we fetch every role category and filter the postings ourselves.
     """
-    props = _fetch_props(YC_JOBS_URL)
-    if not props:
-        raise RuntimeError("could not parse YC jobs page (data-page missing)")
+    postings = _fetch_all_categories()
+    if not postings:
+        raise RuntimeError("could not parse YC jobs page (no postings found)")
 
-    postings = props.get("jobPostings") or []
     rows: list[dict] = []
 
     for job in postings:

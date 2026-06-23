@@ -14,6 +14,11 @@ from models.job import Job
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
+# Jobs scoring below this are considered too weak a match to be worth showing,
+# so they are hidden from every listing/export regardless of the requested
+# filters. The user-supplied min_match_score can only raise this floor.
+MIN_VISIBLE_MATCH_SCORE = 10.0
+
 
 class JobUpdate(BaseModel):
     status: Optional[str] = None
@@ -85,8 +90,8 @@ def list_jobs(
             or_(Job.min_salary >= min_salary, Job.max_salary >= min_salary)
         )
 
-    if min_match_score is not None:
-        query = query.filter(Job.match_score >= min_match_score)
+    match_floor = max(min_match_score or 0.0, MIN_VISIBLE_MATCH_SCORE)
+    query = query.filter(Job.match_score >= match_floor)
 
     if date_from:
         try:
@@ -135,7 +140,10 @@ def export_jobs(
     job_ids: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    query = db.query(Job).filter(Job.is_hidden == False)
+    query = db.query(Job).filter(
+        Job.is_hidden == False,
+        Job.match_score >= MIN_VISIBLE_MATCH_SCORE,
+    )
 
     if job_ids:
         ids = [int(x) for x in job_ids.split(",")]

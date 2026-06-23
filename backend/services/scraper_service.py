@@ -95,7 +95,10 @@ def calculate_match_score(title: str, description: str, location: str, job_type:
 
 # Sites handled by a dedicated scraper instead of jobspy.
 YC_SITE = "ycombinator"
-_CUSTOM_SITES = {YC_SITE, "y_combinator", "yc"}
+# Greenhouse/Lever/Ashby are applicant-tracking-system boards with free public
+# JSON APIs — jobspy can't reach them, so they go through ats_source_scraper.
+ATS_SITES = ("greenhouse", "lever", "ashby")
+_CUSTOM_SITES = {YC_SITE, "y_combinator", "yc", *ATS_SITES}
 
 
 def _map_site_name(site: str) -> str:
@@ -211,9 +214,11 @@ async def run_scrape(db: Session, config_id: int) -> dict:
         sites = [_map_site_name(s) for s in config.sites]
         all_results = []
 
-        # Y Combinator is scraped via its own module (jobspy can't reach it) and
-        # is a global source, so split it out of the per-location jobspy loop.
+        # Y Combinator and the ATS boards (Greenhouse/Lever/Ashby) are scraped via
+        # their own modules (jobspy can't reach them) and are global sources, so
+        # split them out of the per-location jobspy loop.
         yc_requested = YC_SITE in sites
+        ats_requested = [s for s in sites if s in ATS_SITES]
         jobspy_sites = [s for s in sites if s not in _CUSTOM_SITES]
 
         # Support both old single-location and new multi-location format
@@ -238,6 +243,33 @@ async def run_scrape(db: Session, config_id: int) -> dict:
                     log_lines.append("  ycombinator: no results")
             except Exception as e:
                 err_msg = f"ycombinator error: {e}"
+                log_lines.append(f"  {err_msg}")
+                errors_list.append(err_msg)
+
+        if ats_requested:
+            try:
+                from services.ats_source_scraper import scrape_ats_sources
+
+                ats_df = scrape_ats_sources(
+                    platforms=ats_requested,
+                    search_terms=config.search_terms,
+                    locations=locations,
+                    results_wanted=config.results_per_site,
+                    include_remote=config.include_remote,
+                )
+                if ats_df is not None and not ats_df.empty:
+                    all_results.append(ats_df)
+                    counts = ats_df["site"].value_counts().to_dict()
+                    log_lines.append(
+                        "  ATS boards: "
+                        + ", ".join(f"{k}: {v}" for k, v in counts.items())
+                    )
+                else:
+                    log_lines.append(
+                        f"  ATS boards ({', '.join(ats_requested)}): no results"
+                    )
+            except Exception as e:
+                err_msg = f"ATS boards error: {e}"
                 log_lines.append(f"  {err_msg}")
                 errors_list.append(err_msg)
 
